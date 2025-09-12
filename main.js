@@ -304,7 +304,7 @@ function createAndAnimateBoat() {
         boatModel.position,
         {
           z: -9, // Move para a posição final (sentido inverso do bondinho)
-          duration: 4, // 4 segundos de movimento
+          duration: 8, // 4 segundos de movimento
           ease: "linear",
         },
         "<" // Inicia a animação de movimento ao mesmo tempo que a de fade-in
@@ -430,6 +430,9 @@ window.addEventListener("mousedown", onMouseClick, false);
 const infoBox = document.getElementById("info-box");
 const infoText = document.getElementById("info-text");
 function onMouseClick(event) {
+  // Se a experiência não tiver começado, não faça nada e saia da função.
+  if (!isExperienceStarted) return;
+
   const rect = canvas.getBoundingClientRect();
   mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
   mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
@@ -441,31 +444,21 @@ function onMouseClick(event) {
     const clickedObject = intersects[0].object;
     console.log("Você clicou no:", clickedObject.userData.name);
 
-    // APENAS FOCA SE A EXPERIÊNCIA JÁ TIVER COMEÇADO
-    if (isExperienceStarted) {
-      focusOnObject(clickedObject);
-    }
+    // Agora, todo este bloco só é executado se a experiência tiver começado
+    focusOnObject(clickedObject);
 
-    // ----------------------------------------------------
     // Lógica para exibir a caixa de informações
-    // ----------------------------------------------------
-
-    // 1. Atualiza o texto da caixa de informações
     infoText.textContent = clickedObject.userData.name;
 
-    // 2. Converte a posição 3D do objeto para uma posição 2D na tela
     const vector = new THREE.Vector3();
     clickedObject.getWorldPosition(vector);
     vector.project(camera);
 
-    // 3. Calcula as coordenadas do canvas
     const x = (vector.x * 0.5 + 0.5) * rect.width;
     const y = (-vector.y * 0.5 + 0.5) * rect.height;
 
-    // 4. Posiciona a caixa de informações e a exibe
-    // Adiciona um pequeno "offset" para que a caixa não fique em cima do objeto.
     infoBox.style.display = "block";
-    infoBox.style.left = `${x + 20}px`; // Ajuste o 20 para o lado do objeto
+    infoBox.style.left = `${x + 20}px`;
     infoBox.style.top = `${y}px`;
   } else {
     // Esconde a caixa de informações se não houver clique em um botão
