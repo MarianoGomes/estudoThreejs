@@ -12,7 +12,6 @@ import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js"
 import { SAOPass } from "three/addons/postprocessing/SAOPass.js";
 //importando controle de camera
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { transformDirection } from "three/tsl";
 
 //#region VARIAVEIS GERAIS
 let inactivityTimer;
