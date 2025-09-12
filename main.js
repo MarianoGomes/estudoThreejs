@@ -25,6 +25,10 @@ let streetcarModel;
 let lightTimeline;
 const lightControls = { angle: 0 };
 const divRender = document.getElementById("janelaRender");
+let boatModel;
+let boatTimeline;
+const navegarButton = document.getElementById("navegar");
+let isBoatAnimating = false;
 //#endregion
 
 //#region CRIANDO A CENA - no final tem que usar o render()
@@ -98,6 +102,7 @@ function startInactivityAnimation() {
 //#endregion
 
 //#region CARREGANDO MODELO 3D NA CENA
+//#region CARREGANDO O CENARIO
 const loader = new GLTFLoader();
 //carregando o cenario
 loader.load(
@@ -124,8 +129,9 @@ loader.load(
     console.error(error);
   }
 );
+//#endregion
 
-//carregando o trem
+//#region CARREGANDO O STREETCAR
 const streetcar = new GLTFLoader();
 streetcar.load(
   "public/3dmodels/streetcar.glb",
@@ -216,34 +222,104 @@ streetcar.load(
     console.error(error);
   }
 );
+//#endregion
 
-const boat = new GLTFLoader();
-//carregando o cenario
-boat.load(
-  "public/3dmodels/speedboat.gltf",
-  function (gltf) {
-    // 1. Adiciona o modelo à cena
-    scene.add(gltf.scene);
-
-    // 2. Percorre todos os sub-objetos do modelo
-    gltf.scene.traverse(function (node) {
-      if (node.isMesh) {
-        node.castShadow = true;
-        node.receiveShadow = true; // Adicionada a verificação para garantir que o material seja compatível com luzes
-        if (node.material.type === "MeshBasicMaterial") {
-          node.material = new THREE.MeshStandardMaterial({
-            color: node.material.color,
-          });
-        }
-      }
-    });
-  },
-  undefined,
-  function (error) {
-    console.error(error);
+//#region  FUNÇÃO PARA CARREGAR E ANIMAR O BARCO
+function createAndAnimateBoat() {
+  if (isBoatAnimating) {
+    return; // Impede que a função seja chamada novamente se a animação já estiver em andamento
   }
-);
 
+  isBoatAnimating = true; // Inicia a animação
+
+  // Carrega o modelo do barco
+  const boat = new GLTFLoader();
+  boat.load(
+    "public/3dmodels/Yatch.glb",
+    function (gltf) {
+      boatModel = gltf.scene;
+
+      // 1. Configurações iniciais
+      boatModel.position.set(7.75, -0.8, 11); // Posição de início (na água, no lado oposto do bondinho)
+      // Inverte a rotação para virar para o lado certo
+      boatModel.scale.set(3, 3, 3);
+
+      // 2. Habilita sombras e transparências
+      boatModel.traverse(function (node) {
+        if (node.isMesh) {
+          node.castShadow = true;
+          node.receiveShadow = true;
+          node.material.transparent = true;
+          node.material.opacity = 0; // Começa transparente
+        }
+      });
+
+      scene.add(boatModel);
+
+      // 3. Cria a timeline GSAP para a animação do barco
+      const boatOpacity = { value: 0 };
+      boatTimeline = gsap.timeline({
+        paused: false, // Inicia a animação imediatamente
+        onComplete: () => {
+          // Quando a animação termina:
+          scene.remove(boatModel); // Remove o barco da cena
+          isBoatAnimating = false; // Permite um novo clique
+          navegarButton.disabled = false; // Reabilita o botão
+          navegarButton.textContent = "Navegar"; // Volta o texto do botão
+        },
+      });
+
+      // 3.1. Fade-in
+      boatTimeline.to(boatOpacity, {
+        value: 1,
+        duration: 1,
+        onUpdate: () => {
+          boatModel.traverse(function (child) {
+            if (child.isMesh) {
+              child.material.opacity = boatOpacity.value;
+            }
+          });
+        },
+      });
+
+      // 3.2. Movimento
+      boatTimeline.to(
+        boatModel.position,
+        {
+          z: -9, // Move para a posição final (sentido inverso do bondinho)
+          duration: 4, // 4 segundos de movimento
+          ease: "linear",
+        },
+        "<" // Inicia a animação de movimento ao mesmo tempo que a de fade-in
+      );
+
+      // 3.3. Fade-out no final
+      boatTimeline.to(
+        boatOpacity,
+        {
+          value: 0,
+          duration: 1, // 1 segundo para o fade-out
+          onUpdate: () => {
+            boatModel.traverse(function (child) {
+              if (child.isMesh) {
+                child.material.opacity = boatOpacity.value;
+              }
+            });
+          },
+        },
+        "-=0.5" // Começa o fade-out 0.5s antes do final da animação de movimento
+      );
+    },
+    undefined,
+    function (error) {
+      console.error(error);
+      isBoatAnimating = false;
+      navegarButton.disabled = false;
+      navegarButton.textContent = "Navegar";
+    }
+  );
+}
+//#endregion
 //#endregion
 
 //#region CARREGANDO FONTE DE LUZ
@@ -408,8 +484,9 @@ function focusOnObject(object) {
 }
 //#endregion
 
-// --- EVENTO DE CLIQUE PARA INICIAR TUDO ---
+//#region EVENTO DE CLIQUE EM GERAL
 
+//animaçoes do botao Iniciar
 startButton.addEventListener("mouseenter", () => {
   // ANIMAÇÃO DE HOVER: quando o mouse entra no botão, a máscara se expande
   if (!isExperienceStarted) {
@@ -435,6 +512,7 @@ startButton.addEventListener("mouseleave", () => {
 
 startButton.addEventListener("click", () => {
   // Tenta reproduzir a música
+  backgroundMusic.volume = 0.5;
   backgroundMusic
     .play()
     .then(() => {
@@ -500,7 +578,16 @@ startButton.addEventListener("click", () => {
       console.error("Erro ao reproduzir a música:", error);
     });
 });
-//-------------------------- GERANDO A CENA -------------------------
+
+//animaçao da lancha
+navegarButton.addEventListener("click", () => {
+  navegarButton.disabled = true; // Desabilita o botão
+  navegarButton.textContent = "Navegando..."; // Altera o texto do botão
+  createAndAnimateBoat(); // Chama a função que carrega e anima o barco
+});
+//#endregion
+
+//-------------------------- GERANDO A CENA
 // Variáveis para a rotação da luz
 const radius = 50;
 const y = 100;
