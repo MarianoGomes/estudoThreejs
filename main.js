@@ -27,6 +27,8 @@ const lightControls = { angle: 0 };
 const divRender = document.getElementById("janelaRender");
 let boatModel;
 let boatTimeline;
+let mixer; // Variável para o AnimationMixer
+const clock = new THREE.Clock(); // Relógio para o controle de tempo
 const navegarButton = document.getElementById("navegar");
 let isBoatAnimating = false;
 //#endregion
@@ -243,6 +245,18 @@ function createAndAnimateBoat() {
       boatModel.position.set(7.75, -0.8, 11); // Posição de início (na água, no lado oposto do bondinho)
       // Inverte a rotação para virar para o lado certo
       boatModel.scale.set(3, 3, 3);
+      // Cria o mixer para o modelo
+      mixer = new THREE.AnimationMixer(boatModel);
+      // Pega o primeiro clipe de animação do modelo
+      const clip = gltf.animations[0];
+      if (clip) {
+        // Cria uma ação a partir do clipe e a inicia
+        const action = mixer.clipAction(clip);
+        action.play();
+        console.log("Animação do barco iniciada.");
+      } else {
+        console.warn("Nenhuma animação encontrada no modelo do barco.");
+      }
 
       // 2. Habilita sombras e transparências
       boatModel.traverse(function (node) {
@@ -266,6 +280,9 @@ function createAndAnimateBoat() {
           isBoatAnimating = false; // Permite um novo clique
           navegarButton.disabled = false; // Reabilita o botão
           navegarButton.textContent = "Navegar"; // Volta o texto do botão
+          if (mixer) {
+            mixer.stopAllAction();
+          }
         },
       });
 
@@ -641,6 +658,12 @@ lightTimeline.to(
 );
 
 function animate() {
+  //anima o barco
+  const delta = clock.getDelta(); // Obtém o tempo decorrido desde o último frame
+  if (mixer) {
+    mixer.update(delta); // Atualiza o mixer com o tempo decorrido
+  }
+
   if (isAnimating) {
     const rotationSpeed = 0.0001;
     const radius = 20;
