@@ -30,6 +30,7 @@ let mixer; // Variável para o AnimationMixer
 const clock = new THREE.Clock(); // Relógio para o controle de tempo
 const navegarButton = document.getElementById("navegar");
 let isBoatAnimating = false;
+window.addEventListener("resize", onWindowResize, false);
 //#endregion
 
 //#region CRIANDO A CENA - no final tem que usar o render()
@@ -648,6 +649,23 @@ lightTimeline.to(
   },
   0
 );
+
+function onWindowResize() {
+  const newWidth = window.innerWidth;
+  const newHeight = window.innerHeight;
+
+  // Atualiza a proporção da câmera
+  camera.aspect = newWidth / newHeight;
+
+  // Atualiza a matriz de projeção da câmera para que as mudanças tenham efeito
+  camera.updateProjectionMatrix();
+
+  // Atualiza o tamanho do renderizador
+  renderer.setSize(newWidth, newHeight);
+
+  // Se você usa o EffectComposer, também precisa atualizá-lo
+  composer.setSize(newWidth, newHeight);
+}
 
 function animate() {
   //anima o barco
