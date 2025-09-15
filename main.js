@@ -10,6 +10,7 @@ import { ShaderPass } from "three/addons/postprocessing/ShaderPass.js";
 import { LuminosityShader } from "three/addons/shaders/LuminosityShader.js";
 import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
 import { SAOPass } from "three/addons/postprocessing/SAOPass.js";
+import { PointerLockControls } from "three/addons/controls/PointerLockControls.js";
 //importando controle de camera
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 
@@ -29,12 +30,46 @@ let boatTimeline;
 let mixer; // Variável para o AnimationMixer
 const clock = new THREE.Clock(); // Relógio para o controle de tempo
 const navegarButton = document.getElementById("navegar");
+const toggleCameraButton = document.getElementById("toggleCamera");
 let isBoatAnimating = false;
 window.addEventListener("resize", onWindowResize, false);
+// free camera
+let isFreeCameraActive = false;
+let freeCameraControls;
+let freeCamera;
+let activeCamera;
+
+const loadingManager = new THREE.LoadingManager();
+const loadingOverlay = document.getElementById("loading-overlay");
+const loadingProgress = document.getElementById("loading-progress");
+const progressBar = document.getElementById("progress-bar");
+// variáveis para o controle de teclado
+const keyState = {};
+const velocity = new THREE.Vector3();
+const direction = new THREE.Vector3();
+//#endregion
+
+//#region TELA DE LOADING
+loadingManager.onProgress = function (item, loaded, total) {
+  const percentage = Math.round((loaded / total) * 100);
+  loadingProgress.textContent = `${percentage}%`;
+  progressBar.style.width = `${percentage}%`;
+};
+
+loadingManager.onLoad = function () {
+  console.log("Todos os arquivos carregados com sucesso!");
+  // Esconde a tela de loading com uma transição suave
+  loadingOverlay.style.opacity = "0";
+  setTimeout(() => {
+    loadingOverlay.style.display = "none";
+    // Habilite o botão de Iniciar somente após o carregamento completo
+    startButton.disabled = false;
+  }, 1000); // Aguarda a transição terminar (1 segundo)
+};
 //#endregion
 
 //#region CRIANDO A CENA - no final tem que usar o render()
-
+const renderer = new THREE.WebGLRenderer({ antialias: true });
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(
   75, //field of fiwe
@@ -43,8 +78,20 @@ const camera = new THREE.PerspectiveCamera(
   1000 //corte de elementos distantes
 );
 
+// Câmera de movimento livre
+freeCamera = new THREE.PerspectiveCamera(
+  75,
+  window.innerWidth / window.innerHeight,
+  0.1,
+  1000
+);
+freeCamera.position.set(8, 2, 10);
+freeCameraControls = new PointerLockControls(freeCamera, document.body);
+
+// Define a câmera principal como a câmera ativa inicial
+activeCamera = camera;
+
 scene.background = new THREE.Color(0x4682b4); // fundo da cena
-const renderer = new THREE.WebGLRenderer({ antialias: true }); // A variável 'divRender' foi removida, pois ela não é um parâmetro válido.
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.setSize(window.innerWidth, window.innerHeight);
@@ -56,33 +103,17 @@ const luzPivot = new THREE.Object3D();
 luzPivot.rotation.x = -Math.PI / 4; // Inclina o pivô para simular a inclinação da Terra
 luzPivot.position.copy(centroMapa);
 scene.add(luzPivot);
-//#endregion
-
-//#region CARREGANDO UM CUBO NA CENA
-
-// const geometry = new THREE.BoxGeometry(1, 1, 1);
-// const material = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
-// const cube = new THREE.Mesh(geometry, material);
-// cube.position.set(0, 0, 0);
-// scene.add(cube);
-
 scene.fog = new THREE.Fog(0x999999, 13, 60);
 //#endregion
 
 //#region CAMERA QUE SE MOVE - ORBITCONTROLS
 camera.position.set(10, 1, 15); //lado, altura, profundidade
-//camera.lookAt(20, 50, 50); //foco da camera, use apenas se nao tiver OrbitCOntrols na cena
-
 const controls = new OrbitControls(camera, renderer.domElement);
-// Opcional: Limitar o zoom da camera
 controls.target.set(14, 1, -12);
-
-controls.minDistance = 1;
-controls.maxDistance = 20;
-// Bloqueia a translação (movimento lateral) da câmera / zoom / rotacao
-controls.enablePan = false;
-// CONTROLA A CÂMERA DEPOIS DE CLICAR NO BOTÃO
-controls.enabled = false;
+controls.minDistance = 1; // Opcional: Limitar o zoom min da camera
+controls.maxDistance = 20; // Opcional: Limitar o zoom max da camera
+controls.enablePan = false; // Bloqueia a translação (movimento lateral) da câmera / zoom / rotacao
+controls.enabled = false; // CONTROLA A CÂMERA DEPOIS DE CLICAR NO BOTÃO
 // controls.enableZoom = false; // Bloqueia o zoom
 // controls.enableRotate = false; // Bloqueia a rotação
 const startButton = document.getElementById("startButton");
@@ -101,12 +132,49 @@ function startInactivityAnimation() {
   isAnimating = true;
 }
 
+//trocando a camera ativa
+toggleCameraButton.addEventListener("click", () => {
+  if (isFreeCameraActive) {
+    // Se a câmera livre estiver ativa, volte para a câmera principal
+    activeCamera = camera;
+    controls.enabled = true; // Habilita os controles de órbita
+    freeCameraControls.unlock(); // Desbloqueia e desabilita os controles de movimento
+    isFreeCameraActive = false;
+    toggleCameraButton.textContent = "Trocar Câmera";
+
+    // Faz o cursor do mouse reaparecer
+    renderer.domElement.style.cursor = "default";
+  } else {
+    // Se a câmera principal estiver ativa, mude para a câmera livre
+    activeCamera = freeCamera;
+    controls.enabled = false; // Desabilita os controles de órbita
+    freeCameraControls.lock(); // Bloqueia o ponteiro e habilita os controles de movimento
+    isFreeCameraActive = true;
+    toggleCameraButton.textContent = "Voltar";
+
+    // Esconde o cursor do mouse
+    renderer.domElement.style.cursor = "none";
+  }
+
+  // Event listeners para o teclado
+  document.addEventListener("keydown", (event) => {
+    keyState[event.code] = true;
+  });
+
+  document.addEventListener("keyup", (event) => {
+    keyState[event.code] = false;
+  });
+
+  // NOVO: Altere a câmera do RenderPass do pós-processamento
+  renderPass.camera = activeCamera;
+});
+
 //#endregion
 
 //#region CARREGANDO MODELO 3D NA CENA
+
 //#region CARREGANDO O CENARIO
-const loader = new GLTFLoader();
-//carregando o cenario
+const loader = new GLTFLoader(loadingManager); // <--- Adicione o loadingManager aqui
 loader.load(
   "public/3dmodels/scene.gltf",
   function (gltf) {
@@ -522,7 +590,7 @@ startButton.addEventListener("mouseleave", () => {
 
 startButton.addEventListener("click", () => {
   // Tenta reproduzir a música
-  backgroundMusic.volume = 0.5;
+  backgroundMusic.volume = 0.03;
   backgroundMusic
     .play()
     .then(() => {
@@ -668,22 +736,49 @@ function onWindowResize() {
 }
 
 function animate() {
-  //anima o barco
-  const delta = clock.getDelta(); // Obtém o tempo decorrido desde o último frame
-  if (mixer) {
-    mixer.update(delta); // Atualiza o mixer com o tempo decorrido
-  }
+  const delta = clock.getDelta();
 
   if (isAnimating) {
     const rotationSpeed = 0.0001;
     const radius = 20;
-
     const time = performance.now() * rotationSpeed;
-    camera.position.x = centroMapa.x + Math.cos(time) * radius;
-    camera.position.y = centroMapa.y + 3;
-    camera.position.z = centroMapa.z + Math.sin(time) * radius;
-    camera.lookAt(centroMapa);
+    // ...
+    activeCamera.position.x = centroMapa.x + Math.cos(time) * radius;
+    activeCamera.position.y = centroMapa.y + 3;
+    activeCamera.position.z = centroMapa.z + Math.sin(time) * radius;
+    activeCamera.lookAt(centroMapa);
+  } else {
+    // Atualiza APENAS os controles da câmera de órbita, se ela estiver ativa
+    if (!isFreeCameraActive) {
+      controls.update();
+    }
   }
+
+  // NOVO: Lógica de movimento da freeCamera com teclado
+  if (isFreeCameraActive) {
+    // Imprime a posição da câmera no console para depuração
+    console.log("Posição da Câmera:", activeCamera.position);
+
+    // Velocidade de movimento, você pode ajustar este valor
+    const moveSpeed = 0.5;
+
+    // Movimento para frente e para trás
+    if (keyState["KeyW"]) {
+      freeCameraControls.moveForward(moveSpeed);
+    }
+    if (keyState["KeyS"]) {
+      freeCameraControls.moveForward(-moveSpeed);
+    }
+
+    // Movimento para a esquerda e para a direita
+    if (keyState["KeyA"]) {
+      freeCameraControls.moveRight(-moveSpeed);
+    }
+    if (keyState["KeyD"]) {
+      freeCameraControls.moveRight(moveSpeed);
+    }
+  }
+
   const globalLightPosition = new THREE.Vector3();
   luzDoSol.getWorldPosition(globalLightPosition);
 
@@ -704,8 +799,9 @@ function animate() {
     luzDoSol.intensity = minIntensity;
   }
   luzDoSol.lookAt(centroMapa);
-  controls.update();
-  renderer.render(scene, camera);
+
+  // Use a câmera ativa para renderizar a cena e o pós-processamento
+  renderer.render(scene, activeCamera); // <-- Esta linha já estava correta da última vez
   composer.render();
 }
 renderer.setAnimationLoop(animate);
