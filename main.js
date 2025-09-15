@@ -202,7 +202,7 @@ loader.load(
 //#endregion
 
 //#region CARREGANDO O STREETCAR
-const streetcar = new GLTFLoader();
+const streetcar = new GLTFLoader(loadingManager); // <--- Adicione o loadingManager aqui
 streetcar.load(
   "public/3dmodels/streetcar.glb",
 
@@ -303,7 +303,7 @@ function createAndAnimateBoat() {
   isBoatAnimating = true; // Inicia a animação
 
   // Carrega o modelo do barco
-  const boat = new GLTFLoader();
+  const boat = new GLTFLoader(loadingManager);
   boat.load(
     "public/3dmodels/Yatch.glb",
     function (gltf) {
